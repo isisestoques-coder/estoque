@@ -24,7 +24,9 @@ export default function CustomersPage() {
   // Payment Modal state
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentInstallment, setPaymentInstallment] = useState(null);
-  const [paymentAmount, setPaymentAmount] = useState('');
+  // Delete Confirmation state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -168,6 +170,24 @@ export default function CustomersPage() {
     }
   };
 
+  const handleDeleteCustomer = async () => {
+    if (!customerToDelete) return;
+    try {
+      setLoading(true);
+      const { error } = await supabase.from('customers').delete().eq('id', customerToDelete.id);
+      if (error) throw error;
+      
+      alert('Cliente excluído com sucesso!');
+      setDeleteConfirmOpen(false);
+      setCustomerToDelete(null);
+      setView('list');
+      fetchCustomers();
+    } catch (error) {
+      alert('Erro ao excluir cliente: ' + error.message);
+      setLoading(false);
+    }
+  };
+
   const filteredCustomers = customers.filter(c => 
     c.name.toLowerCase().includes(search.toLowerCase()) || 
     (c.phone && c.phone.includes(search))
@@ -223,16 +243,28 @@ export default function CustomersPage() {
                 {currentCustomer.phone} | {currentCustomer.address}
               </div>
             </div>
-            <button 
-              onClick={() => {
-                setFormData({ name: currentCustomer.name, phone: currentCustomer.phone || '', address: currentCustomer.address || '' });
-                setView('form');
-              }}
-              className="btn btn-secondary" 
-              style={{ width: 'auto', padding: '8px 12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center' }}
-            >
-              <Edit2 size={16} style={{ marginRight: '6px' }} /> Editar
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={() => {
+                  setFormData({ name: currentCustomer.name, phone: currentCustomer.phone || '', address: currentCustomer.address || '' });
+                  setView('form');
+                }}
+                className="btn btn-secondary" 
+                style={{ width: 'auto', padding: '8px 12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center' }}
+              >
+                <Edit2 size={16} style={{ marginRight: '6px' }} /> Editar
+              </button>
+              <button 
+                onClick={() => {
+                  setCustomerToDelete(currentCustomer);
+                  setDeleteConfirmOpen(true);
+                }}
+                className="btn btn-secondary" 
+                style={{ width: 'auto', padding: '8px 12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', color: 'var(--status-critical)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+              >
+                <Trash2 size={16} style={{ marginRight: '6px' }} /> Excluir
+              </button>
+            </div>
           </div>
           
           <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
@@ -386,6 +418,34 @@ export default function CustomersPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirmOpen && customerToDelete && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px'
+          }}>
+            <div className="glass-card animate-in" style={{ width: '100%', maxWidth: '400px', borderTop: '4px solid var(--status-critical)' }}>
+              <h2 style={{ fontSize: '1.25rem', marginBottom: '16px', color: 'var(--status-critical)' }}>
+                Excluir Cliente?
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.5' }}>
+                Tem certeza que deseja excluir o cliente <strong>{customerToDelete.name}</strong>?
+                <br/><br/>
+                Isso removerá permanentemente o histórico de parcelas e recebimentos vinculados a ele. Esta ação não pode ser desfeita.
+              </p>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button className="btn btn-secondary" onClick={() => setDeleteConfirmOpen(false)} style={{ flex: 1 }}>
+                  Cancelar
+                </button>
+                <button className="btn" onClick={handleDeleteCustomer} style={{ flex: 1, background: 'var(--status-critical)', color: 'white' }} disabled={loading}>
+                  {loading ? 'Excluindo...' : 'Sim, Excluir'}
+                </button>
+              </div>
             </div>
           </div>
         )}
