@@ -1,0 +1,254 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { BarChart3, TrendingUp, DollarSign, Package } from 'lucide-react';
+import { 
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, 
+  Title, Tooltip, Legend, PointElement, LineElement 
+} from 'chart.js';
+import { Bar, Line } from 'react-chartjs-2';
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, isWithinInterval } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+ChartJS.register(
+  CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement
+);
+
+export default function DashboardPage() {
+  const [sales, setSales] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('month'); // today, week, month, year, all
+  
+  // Custom date range
+  const [startDate, setStartDate] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  useEffect(() => {
+    fetchSales();
+  }, []);
+
+  async function fetchSales() {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('sales')
+        .select('*')
+        .order('sold_at', { ascending: true });
+        
+      if (error) throw error;
+      setSales(data || []);
+    } catch (error) {
+      console.error('Error fetching sales:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Filter sales based on period
+  const getFilteredSales = () => {
+    const now = new Date();
+    let start, end;
+
+    switch (period) {
+      case 'today':
+        start = new Date(now.setHours(0,0,0,0));
+        end = new Date(now.setHours(23,59,59,999));
+        break;
+      case 'week':
+        start = startOfWeek(now, { weekStartsOn: 0 });
+        end = endOfWeek(now, { weekStartsOn: 0 });
+        break;
+      case 'month':
+        start = startOfMonth(now);
+        end = endOfMonth(now);
+        break;
+      case 'year':
+        start = startOfYear(now);
+        end = endOfYear(now);
+        break;
+      case 'custom':
+        start = new Date(startDate);
+        start.setHours(0,0,0,0);
+        end = new Date(endDate);
+        end.setHours(23,59,59,999);
+        break;
+      case 'all':
+      default:
+        return sales;
+    }
+
+    return sales.filter(s => {
+      if (!s.sold_at) return false;
+      const date = parseISO(s.sold_at);
+      return isWithinInterval(date, { start, end });
+    });
+  };
+
+  const filteredSales = getFilteredSales();
+
+  // Calculate metrics
+  const totalRevenue = filteredSales.reduce((sum, s) => sum + Number(s.total_price), 0);
+  const itemsSold = filteredSales.reduce((sum, s) => sum + s.quantity, 0);
+  const averageTicket = filteredSales.length > 0 ? totalRevenue / filteredSales.length : 0;
+
+  // Group by date for chart
+  const salesByDate = filteredSales.reduce((acc, s) => {
+    if (!s.sold_at) return acc;
+    const dateStr = format(parseISO(s.sold_at), 'dd/MM/yyyy');
+    if (!acc[dateStr]) acc[dateStr] = 0;
+    acc[dateStr] += Number(s.total_price);
+    return acc;
+  }, {});
+
+  // Group by category for chart
+  const salesByCategory = filteredSales.reduce((acc, s) => {
+    const cat = s.product_code || 'Outros';
+    if (!acc[cat]) acc[cat] = 0;
+    acc[cat] += Number(s.total_price);
+    return acc;
+  }, {});
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#94a3b8' } },
+      title: { display: false }
+    },
+    scales: {
+      y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+      x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+    }
+  };
+
+  const lineChartData = {
+    labels: Object.keys(salesByDate),
+    datasets: [
+      {
+        label: 'Receita (R$)',
+        data: Object.values(salesByDate),
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+        tension: 0.3,
+        fill: true,
+      }
+    ]
+  };
+
+  const barChartData = {
+    labels: Object.keys(salesByCategory),
+    datasets: [
+      {
+        label: 'Vendas por Categoria (R$)',
+        data: Object.values(salesByCategory),
+        backgroundColor: [
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(139, 92, 246, 0.8)',
+          'rgba(16, 185, 129, 0.8)',
+          'rgba(245, 158, 11, 0.8)',
+          'rgba(239, 68, 68, 0.8)',
+        ],
+        borderRadius: 4,
+      }
+    ]
+  };
+
+  return (
+    <div className="page-container animate-in">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h1 className="page-title" style={{ marginBottom: 0 }}>Dashboard</h1>
+        <div style={{ background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent-purple)', padding: '8px', borderRadius: '50%' }}>
+          <BarChart3 size={24} />
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="glass-card" style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', margin: '0 -10px', padding: '0 10px' }}>
+          {['today', 'week', 'month', 'year', 'all', 'custom'].map(p => (
+            <button 
+              key={p}
+              onClick={() => setPeriod(p)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '20px',
+                background: period === p ? 'var(--primary-accent)' : 'rgba(255,255,255,0.05)',
+                color: period === p ? '#fff' : 'var(--text-secondary)',
+                fontWeight: period === p ? '600' : '400',
+                whiteSpace: 'nowrap',
+                border: 'none',
+              }}
+            >
+              {p === 'today' ? 'Hoje' : p === 'week' ? 'Semana' : p === 'month' ? 'Mês' : p === 'year' ? 'Ano' : p === 'all' ? 'Tudo' : 'Personalizado'}
+            </button>
+          ))}
+        </div>
+        
+        {period === 'custom' && (
+          <div style={{ display: 'flex', gap: '12px', marginTop: '16px', animation: 'slideUpFade 0.3s' }}>
+            <div style={{ flex: 1 }}>
+              <label className="input-label">De:</label>
+              <input type="date" className="input-field" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="input-label">Até:</label>
+              <input type="date" className="input-field" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>Carregando dados...</div>
+      ) : (
+        <>
+          {/* KPI Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+            <div className="glass-card" style={{ padding: '16px', borderTop: '3px solid var(--primary-accent)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                <DollarSign size={16} /> <span style={{ fontSize: '0.85rem' }}>Receita Total</span>
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>R$ {totalRevenue.toFixed(2)}</div>
+            </div>
+            
+            <div className="glass-card" style={{ padding: '16px', borderTop: '3px solid var(--accent-green)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                <Package size={16} /> <span style={{ fontSize: '0.85rem' }}>Itens Vendidos</span>
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{itemsSold}</div>
+            </div>
+            
+            <div className="glass-card" style={{ padding: '16px', borderTop: '3px solid var(--accent-purple)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                <TrendingUp size={16} /> <span style={{ fontSize: '0.85rem' }}>Ticket Médio</span>
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>R$ {averageTicket.toFixed(2)}</div>
+            </div>
+          </div>
+
+          {/* Charts */}
+          {filteredSales.length > 0 ? (
+            <div style={{ display: 'grid', gap: '24px' }}>
+              <div className="glass-card">
+                <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--text-secondary)' }}>Evolução de Receita</h3>
+                <div style={{ height: '200px' }}>
+                  <Line options={chartOptions} data={lineChartData} />
+                </div>
+              </div>
+              
+              <div className="glass-card">
+                <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--text-secondary)' }}>Receita por Categoria</h3>
+                <div style={{ height: '200px' }}>
+                  <Bar options={chartOptions} data={barChartData} />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="glass-card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+              Nenhuma venda encontrada para o período selecionado.
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
