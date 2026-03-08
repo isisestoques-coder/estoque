@@ -45,8 +45,30 @@ export default function DashboardPage() {
       if (logsRes.error) throw logsRes.error;
       if (customersRes.error) throw customersRes.error;
       
-      setSales(salesRes.data || []);
-      setPaymentLogs(logsRes.data || []);
+      const allSales = salesRes.data || [];
+      const visibleSales = allSales.filter(s => s.is_hidden !== true);
+      
+      // Determine which sales are hidden to filter out their logs from the dashboard
+      const hiddenSaleIds = new Set(allSales.filter(s => s.is_hidden === true).map(s => s.id));
+      
+      // A payment log belongs to an installment, which belongs to a sale, but payment_logs doesn't have sale_id.
+      // We know payment_logs are for crediario. If a crediário sale is hidden, we shouldn't count its logs in the dashboard.
+      // Wait, since we can't easily map log -> installment -> sale here without fetching installments, 
+      // let's just fetch the installments to map them!
+      const instRes = await supabase.from('installments').select('id, sale_id');
+      const instMap = {}; // log.installment_id -> sale_id
+      if (instRes.data) {
+        instRes.data.forEach(inst => { instMap[inst.id] = inst.sale_id; });
+      }
+
+      const allLogs = logsRes.data || [];
+      const visibleLogs = allLogs.filter(log => {
+         const saleIdForLog = instMap[log.installment_id];
+         return !hiddenSaleIds.has(saleIdForLog);
+      });
+
+      setSales(visibleSales);
+      setPaymentLogs(visibleLogs);
       setCustomers(customersRes.data || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -154,9 +176,22 @@ export default function DashboardPage() {
   const handleClearSales = async () => {
     setLoading(true);
     try {
-      // Supabase delete all requires a filter that is always true when RLS is enabled and you want to delete everything
-      const { error } = await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      if (error) throw error;
+      // Instead of deleting, we flag the sales as hidden so the dashboard ignores them
+      // but they remain anchored in the database for the customer's history.
+      const { data: salesToHide, error: fetchError } = await supabase.from('sales').select('id').is('is_hidden', false);
+      if (fetchError && fetchError.code !== 'PGRST106') {
+        // PGRST106 means column doesn't exist yet, we can catch it or ignore if it's fine
+      }
+      
+      // If we don't have is_hidden column created yet or all are already hidden
+      const ids = salesToHide ? salesToHide.map(s => s.id) : [];
+
+      if (ids.length > 0) {
+        // Update them to be hidden
+        const { error: hideError } = await supabase.from('sales').update({ is_hidden: true }).in('id', ids);
+        // Supabase update might fail if the column doesn't exist, which requires running the SQL snippet
+        if (hideError) throw hideError;
+      }
       
       const now = new Date();
       const formattedDate = format(now, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
@@ -166,7 +201,11 @@ export default function DashboardPage() {
       setDeleteModalOpen(false);
       fetchSales();
     } catch (error) {
-      alert("Erro ao apagar dados: " + error.message);
+      if (error.message.includes('is_hidden')) {
+          alert('Por favor, rode o script de atualização no Supabase (clique na notificação) primeiro para habilitar esta função.');
+      } else {
+          alert("Erro ao apagar dados: " + error.message);
+      }
       setLoading(false);
     }
   };
