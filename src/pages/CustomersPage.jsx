@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { toPng } from 'html-to-image';
 import { 
   Users, UserPlus, Search, Edit2, Trash2, ArrowLeft, 
@@ -203,75 +203,83 @@ export default function CustomersPage() {
   };
 
   const generatePDFReport = () => {
-    if (!currentCustomer) return;
-    
-    const doc = new jsPDF();
-    const now = format(new Date(), 'dd/MM/yyyy HH:mm');
-    
-    // Header
-    doc.setFontSize(22);
-    doc.setTextColor(40);
-    doc.text('Relatório de Cliente - Estoque ISIS', 105, 20, { align: 'center' });
-    
-    doc.setFontSize(12);
-    doc.text(`Gerado em: ${now}`, 105, 28, { align: 'center' });
-    
-    // Customer Info
-    doc.setFontSize(14);
-    doc.text('Dados do Cliente', 14, 45);
-    doc.setFontSize(11);
-    doc.text(`Nome: ${currentCustomer.name}`, 14, 52);
-    doc.text(`Telefone: ${currentCustomer.phone || 'Não informado'}`, 14, 58);
-    doc.text(`Endereço: ${currentCustomer.address || 'Não informado'}`, 14, 64);
-    doc.setTextColor(200, 0, 0);
-    doc.text(`Saldo Devedor Atual: R$ ${Number(currentCustomer.debt_balance).toFixed(2)}`, 14, 70);
-    doc.setTextColor(0);
-
-    // Installments Table
-    if (customerInstallments.length > 0) {
-      doc.setFontSize(14);
-      doc.text('Histórico de Parcelas', 14, 85);
+    try {
+      if (!currentCustomer) return;
       
-      const head = [['#', 'Vencimento', 'Valor (R$)', 'Pago (R$)', 'Status']];
-      const body = customerInstallments.map(inst => [
-        inst.installment_number,
-        format(new Date(inst.due_date), 'dd/MM/yyyy'),
-        Number(inst.amount).toFixed(2),
-        Number(inst.paid_amount).toFixed(2),
-        inst.status === 'paid' ? 'Pago' : inst.status === 'partial' ? 'Parcial' : 'Pendente'
-      ]);
-
-      doc.autoTable({
-        startY: 90,
-        head: head,
-        body: body,
-        theme: 'grid',
-        headStyles: { fillColor: [139, 92, 246] }
-      });
-    }
-
-    // Payment Logs Table
-    if (customerPaymentLogs.length > 0) {
-      const finalY = doc.lastAutoTable?.finalY || 90;
-      doc.setFontSize(14);
-      doc.text('Histórico de Recebimentos', 14, finalY + 15);
+      const doc = new jsPDF();
+      const now = format(new Date(), 'dd/MM/yyyy HH:mm');
       
-      const headLogs = [['Data/Hora', 'Valor Recebido (R$)']];
-      const bodyLogs = customerPaymentLogs.map(log => [
-        format(new Date(log.paid_at), 'dd/MM/yyyy HH:mm'),
-        Number(log.amount_paid).toFixed(2)
-      ]);
+      // Header
+      doc.setFontSize(22);
+      doc.setTextColor(40);
+      doc.text('Relatório de Cliente - Estoque ISIS', 105, 20, { align: 'center' });
+      
+      doc.setFontSize(12);
+      doc.text(`Gerado em: ${now}`, 105, 28, { align: 'center' });
+      
+      // Customer Info
+      doc.setFontSize(14);
+      doc.text('Dados do Cliente', 14, 45);
+      doc.setFontSize(11);
+      doc.text(`Nome: ${currentCustomer.name}`, 14, 52);
+      doc.text(`Telefone: ${currentCustomer.phone || 'Não informado'}`, 14, 58);
+      doc.text(`Endereço: ${currentCustomer.address || 'Não informado'}`, 14, 64);
+      doc.setTextColor(200, 0, 0);
+      doc.text(`Saldo Devedor Atual: R$ ${Number(currentCustomer.debt_balance).toFixed(2)}`, 14, 70);
+      doc.setTextColor(0);
 
-      doc.autoTable({
-        startY: finalY + 20,
-        head: headLogs,
-        body: bodyLogs,
-        theme: 'striped',
-        headStyles: { fillColor: [16, 185, 129] }
-      });
+      let finalY = 75;
+
+      // Installments Table
+      if (customerInstallments.length > 0) {
+        doc.setFontSize(14);
+        doc.text('Histórico de Parcelas', 14, finalY + 10);
+        
+        const head = [['#', 'Vencimento', 'Valor (R$)', 'Pago (R$)', 'Status']];
+        const body = customerInstallments.map(inst => [
+          inst.installment_number,
+          format(new Date(inst.due_date), 'dd/MM/yyyy'),
+          Number(inst.amount).toFixed(2),
+          Number(inst.paid_amount).toFixed(2),
+          inst.status === 'paid' ? 'Pago' : inst.status === 'partial' ? 'Parcial' : 'Pendente'
+        ]);
+
+        autoTable(doc, {
+          startY: finalY + 15,
+          head: head,
+          body: body,
+          theme: 'grid',
+          headStyles: { fillColor: [139, 92, 246] }
+        });
+        
+        finalY = doc.lastAutoTable?.finalY || finalY + 20;
+      }
+
+      // Payment Logs Table
+      if (customerPaymentLogs.length > 0) {
+        doc.setFontSize(14);
+        doc.text('Histórico de Recebimentos', 14, finalY + 15);
+        
+        const headLogs = [['Data/Hora', 'Valor Recebido (R$)']];
+        const bodyLogs = customerPaymentLogs.map(log => [
+          format(new Date(log.paid_at), 'dd/MM/yyyy HH:mm'),
+          Number(log.amount_paid).toFixed(2)
+        ]);
+
+        autoTable(doc, {
+          startY: finalY + 20,
+          head: headLogs,
+          body: bodyLogs,
+          theme: 'striped',
+          headStyles: { fillColor: [16, 185, 129] }
+        });
+      }
+
+      doc.save(`Relatorio_${currentCustomer.name.replace(/\s+/g, '_')}.pdf`);
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      alert('Erro ao gerar o PDF: ' + error.message);
     }
-
-    doc.save(`Relatorio_${currentCustomer.name.replace(/\s+/g, '_')}.pdf`);
   };
 
   const shareReceiptAsImage = async () => {
