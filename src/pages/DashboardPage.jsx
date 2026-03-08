@@ -16,6 +16,7 @@ ChartJS.register(
 export default function DashboardPage() {
   const [sales, setSales] = useState([]);
   const [paymentLogs, setPaymentLogs] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('month'); // today, week, month, year, all
   
@@ -30,16 +31,19 @@ export default function DashboardPage() {
   async function fetchSales() {
     setLoading(true);
     try {
-      const [salesRes, logsRes] = await Promise.all([
+      const [salesRes, logsRes, customersRes] = await Promise.all([
         supabase.from('sales').select('*').order('sold_at', { ascending: true }),
-        supabase.from('payment_logs').select('*').order('paid_at', { ascending: true })
+        supabase.from('payment_logs').select('*').order('paid_at', { ascending: true }),
+        supabase.from('customers').select('debt_balance')
       ]);
         
       if (salesRes.error) throw salesRes.error;
       if (logsRes.error) throw logsRes.error;
+      if (customersRes.error) throw customersRes.error;
       
       setSales(salesRes.data || []);
       setPaymentLogs(logsRes.data || []);
+      setCustomers(customersRes.data || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -139,6 +143,9 @@ export default function DashboardPage() {
   });
 
   const totalReceived = Object.values(salesByPaymentMethod).reduce((sum, val) => sum + val, 0);
+
+  // Global Atemporal KPI
+  const totalPendingCrediario = customers.reduce((sum, c) => sum + Number(c.debt_balance || 0), 0);
 
   const handleClearSales = async () => {
     if (window.confirm("ATENÇÃO: Você está prestes a apagar TODOS os registros de vendas, parcelamentos e recebtimentos do sistema. Essa ação é IRREVERSÍVEL. Deseja continuar?")) {
@@ -273,6 +280,13 @@ export default function DashboardPage() {
                 <TrendingUp size={16} /> <span style={{ fontSize: '0.85rem' }}>Valor Recebido Real</span>
               </div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>R$ {totalReceived.toFixed(2)}</div>
+            </div>
+
+            <div className="glass-card" style={{ padding: '16px', borderTop: '3px solid var(--status-critical)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                <DollarSign size={16} color="var(--status-critical)" /> <span style={{ fontSize: '0.85rem' }}>Fiado a Receber (Geral)</span>
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--status-critical)' }}>R$ {totalPendingCrediario.toFixed(2)}</div>
             </div>
           </div>
 
