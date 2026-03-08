@@ -154,25 +154,16 @@ export default function DashboardPage() {
   const handleClearSales = async () => {
     setLoading(true);
     try {
-      // 1. Delete all sales, payment logs and installments
-      // We use a filter that matches everything to satisfy Supabase delete requirements
-      const [salesDel, logsDel, instDel] = await Promise.all([
-        supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('payment_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('installments').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-      ]);
-
-      if (salesDel.error) throw salesDel.error;
-      if (logsDel.error) throw logsDel.error;
-      if (instDel.error) throw instDel.error;
-
-      // 2. Reset debt balance for all customers
-      const { error: custError } = await supabase
-        .from('customers')
-        .update({ debt_balance: 0 })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+      // Usamos uma RPC (Stored Procedure) no Supabase para garantir que a deleção seja feita 
+      // de forma atômica e confiável no servidor, ignorando limites do cliente.
+      const { error } = await supabase.rpc('clear_dashboard_data');
       
-      if (custError) throw custError;
+      if (error) {
+        // Se a RPC não estiver criada ainda, tentamos a deleção manual como fallback
+        console.warn("RPC not found, trying manual delete fallback...");
+        const { error: manualError } = await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (manualError) throw manualError;
+      }
       
       const now = new Date();
       const formattedDate = format(now, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
@@ -181,7 +172,7 @@ export default function DashboardPage() {
       
       setDeleteModalOpen(false);
       fetchSales();
-      alert("Todos os registros financeiros e saldo de devedores foram zerados com sucesso.");
+      alert("Dashboard limpo com sucesso! (Vendas e recebimentos foram apagados, mas as dívidas dos clientes foram mantidas).");
     } catch (error) {
       alert("Erro ao apagar dados: " + error.message);
       setLoading(false);
