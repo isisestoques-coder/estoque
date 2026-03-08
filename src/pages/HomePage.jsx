@@ -48,6 +48,7 @@ export default function HomePage() {
     if (!acc[product.code]) {
       acc[product.code] = {
         code: product.code,
+        description: product.description,
         totalQuantity: 0,
         items: []
       };
