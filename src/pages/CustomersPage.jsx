@@ -5,7 +5,11 @@ import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { toPng } from 'html-to-image';
-import { Share2, FileText, Download, X } from 'lucide-react';
+import { 
+  Users, UserPlus, Search, Edit2, Trash2, ArrowLeft, 
+  DollarSign, Calendar, Clock, CheckCircle, Share2, 
+  FileText, Download, X 
+} from 'lucide-react';
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -27,6 +31,8 @@ export default function CustomersPage() {
   // Payment Modal state
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentInstallment, setPaymentInstallment] = useState(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  
   // Delete Confirmation state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState(null);
