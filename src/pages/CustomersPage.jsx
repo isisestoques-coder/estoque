@@ -587,7 +587,7 @@ export default function CustomersPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
                   <div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Pagamento</div>
-                    <div style={{ fontWeight: '600', textTransform: 'uppercase' }}>{selectedSale.payment_method === 'crediario' ? 'Crediário/Fiado' : selectedSale.payment_method}</div>
+                    <div style={{ fontWeight: '600', textTransform: 'uppercase' }}>{selectedSale.payment_method === 'crediario' ? 'Crediário' : selectedSale.payment_method}</div>
                   </div>
                   <div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Entrada</div>

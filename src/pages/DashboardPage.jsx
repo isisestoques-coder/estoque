@@ -304,7 +304,7 @@ export default function DashboardPage() {
 
             <div className="glass-card" style={{ padding: '16px', borderTop: '3px solid var(--status-critical)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                <DollarSign size={16} color="var(--status-critical)" /> <span style={{ fontSize: '0.85rem' }}>Fiado a Receber (Geral)</span>
+                <DollarSign size={16} color="var(--status-critical)" /> <span style={{ fontSize: '0.85rem' }}>Crediário a Receber (Geral)</span>
               </div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--status-critical)' }}>R$ {totalPendingCrediario.toFixed(2)}</div>
             </div>
@@ -376,7 +376,7 @@ export default function DashboardPage() {
                             fontWeight: sale.payment_method === 'crediario' ? 'bold' : 'normal',
                             border: sale.payment_method === 'crediario' ? '1px solid rgba(59, 130, 246, 0.5)' : 'none'
                           }}>
-                            {sale.payment_method === 'crediario' ? 'CREDIÁRIO / FIADO' : sale.payment_method.toUpperCase()}
+                            {sale.payment_method === 'crediario' ? 'CREDIÁRIO' : sale.payment_method.toUpperCase()}
                             {sale.payment_method === 'crediario' && sale.installments_count > 1 ? ` (${sale.installments_count}x)` : ''}
                           </span>
                         )}
