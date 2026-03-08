@@ -52,7 +52,7 @@ export default function LoginPage() {
           }}>
             <Lock size={32} color="var(--primary-accent)" />
           </div>
-          <h1 className="page-title" style={{ marginBottom: '8px' }}>Estoque ISIS</h1>
+          <h1 className="page-title" style={{ marginBottom: '8px' }}>Espaço Dell'as</h1>
           <p style={{ color: 'var(--text-secondary)' }}>Acesso restrito ao sistema</p>
         </div>
 

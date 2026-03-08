@@ -212,7 +212,7 @@ export default function CustomersPage() {
       // Header
       doc.setFontSize(22);
       doc.setTextColor(40);
-      doc.text('Relatório de Cliente - Estoque ISIS', 105, 20, { align: 'center' });
+      doc.text("Relatório de Cliente - Espaço Dell'as", 105, 20, { align: 'center' });
       
       doc.setFontSize(12);
       doc.text(`Gerado em: ${now}`, 105, 28, { align: 'center' });
@@ -575,7 +575,7 @@ export default function CustomersPage() {
               <div id="receipt-content" style={{ backgroundColor: '#0f172a', padding: '32px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
                 <div style={{ textAlign: 'center', marginBottom: '24px' }}>
                   <div style={{ fontSize: '0.8rem', color: 'var(--primary-accent)', fontWeight: 'bold', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '8px' }}>Recibo de Compra</div>
-                  <h2 style={{ fontSize: '1.8rem', fontWeight: 'bold', margin: 0 }}>Estoque ISIS</h2>
+                  <h2 style={{ fontSize: '1.8rem', fontWeight: 'bold', margin: 0 }}>Espaço Dell'as</h2>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{format(new Date(selectedSale.sold_at), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}</div>
                 </div>
 
