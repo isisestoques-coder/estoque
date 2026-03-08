@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, Search, Edit2, Trash2, Save, X } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { Plus, Search, Edit2, Trash2, Save, X, FileText, Download } from 'lucide-react';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
@@ -118,6 +120,69 @@ export default function ProductsPage() {
     setCurrentProduct(null);
   };
 
+  const generateInventoryPDF = () => {
+    try {
+      const doc = new jsPDF();
+      const now = new Date().toLocaleString('pt-BR');
+      
+      // Header
+      doc.setFontSize(22);
+      doc.setTextColor(40);
+      doc.text("Resumo de Inventário - Espaço Dell'as", 105, 20, { align: 'center' });
+      
+      doc.setFontSize(10);
+      doc.text(`Gerado em: ${now}`, 105, 27, { align: 'center' });
+
+      // Calculate totals
+      const totalItems = products.reduce((acc, p) => acc + (p.quantity || 0), 0);
+      const totalValue = products.reduce((acc, p) => acc + (p.price * (p.quantity || 0)), 0);
+
+      doc.setFontSize(12);
+      doc.setTextColor(0);
+      doc.text(`Total de Itens em Estoque: ${totalItems}`, 14, 40);
+      doc.text(`Valor Total do Inventário: R$ ${totalValue.toFixed(2)}`, 14, 47);
+
+      // Group by Category (from code)
+      // We assume the code format like "CATEGORIA-COD" or just use the code as is
+      const sortedProducts = [...products].sort((a, b) => {
+        if (a.code < b.code) return -1;
+        if (a.code > b.code) return 1;
+        return 0;
+      });
+
+      const tableRows = sortedProducts.map(p => [
+        p.code,
+        p.description || '-',
+        p.size,
+        p.quantity,
+        `R$ ${Number(p.price).toFixed(2)}`,
+        `R$ ${(p.price * p.quantity).toFixed(2)}`
+      ]);
+
+      autoTable(doc, {
+        startY: 55,
+        head: [['Cod/Cat', 'Descrição', 'Tam', 'Qtd', 'Preço Un.', 'Subtotal']],
+        body: tableRows,
+        theme: 'grid',
+        headStyles: { fillColor: [139, 92, 246] }, // Violet color to match theme
+        styles: { fontSize: 9 },
+        didDrawPage: (data) => {
+          // Footer with page number
+          const str = 'Página ' + doc.internal.getNumberOfPages();
+          doc.setFontSize(10);
+          const pageSize = doc.internal.pageSize;
+          const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+          doc.text(str, data.settings.margin.left, pageHeight - 10);
+        }
+      });
+
+      doc.save(`Inventario_Espaco_Dellas_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      alert('Erro ao gerar o PDF de inventário: ' + error.message);
+    }
+  };
+
   const filteredProducts = products.filter(p => 
     p.code.toLowerCase().includes(search.toLowerCase()) || 
     (p.description && p.description.toLowerCase().includes(search.toLowerCase())) ||
@@ -126,7 +191,18 @@ export default function ProductsPage() {
 
   return (
     <div className="page-container animate-in">
-      <h1 className="page-title">Cadastro de Produtos</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h1 className="page-title" style={{ marginBottom: 0 }}>Cadastro de Produtos</h1>
+        <button 
+          onClick={generateInventoryPDF}
+          className="btn btn-secondary" 
+          style={{ width: 'auto', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--accent-purple)' }}
+        >
+          <FileText size={18} color="var(--accent-purple)" />
+          <span className="hide-mobile" style={{ fontSize: '0.9rem' }}>Exportar Inventário (PDF)</span>
+          <Download size={16} className="show-mobile" color="var(--accent-purple)" />
+        </button>
+      </div>
 
       {/* Form Section */}
       <div className="glass-card" style={{ marginBottom: '24px' }}>
