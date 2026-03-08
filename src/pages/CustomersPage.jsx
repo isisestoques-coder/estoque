@@ -21,6 +21,11 @@ export default function CustomersPage() {
   const [customerInstallments, setCustomerInstallments] = useState([]);
   const [customerPaymentLogs, setCustomerPaymentLogs] = useState([]);
 
+  // Payment Modal state
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentInstallment, setPaymentInstallment] = useState(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+
   useEffect(() => {
     fetchCustomers();
   }, [view]);
@@ -94,18 +99,24 @@ export default function CustomersPage() {
     }
   };
 
-  const handlePayInstallment = async (installment) => {
-    const amountToPay = window.prompt(`Valor da parcela: R$ ${(installment.amount - installment.paid_amount).toFixed(2)}\n\nDigite o valor que o cliente está pagando agora (Pagamento total ou parcial):`, (installment.amount - installment.paid_amount).toFixed(2));
+  const openPaymentModal = (installment) => {
+    setPaymentInstallment(installment);
+    setPaymentAmount((installment.amount - installment.paid_amount).toFixed(2));
+    setPaymentModalOpen(true);
+  };
+
+  const handlePayInstallment = async (e) => {
+    e.preventDefault();
+    if (!paymentInstallment) return;
     
-    if (!amountToPay) return; // Cancelled
-    
-    const paidValue = parseFloat(amountToPay.replace(',', '.'));
+    const paidValue = parseFloat(String(paymentAmount).replace(',', '.'));
     if (isNaN(paidValue) || paidValue <= 0) {
       return alert('Valor inválido!');
     }
 
     try {
       setLoading(true);
+      const installment = paymentInstallment;
       
       const isTotalPayment = paidValue >= (installment.amount - installment.paid_amount);
       const newPaidAmount = installment.paid_amount + paidValue;
@@ -144,6 +155,9 @@ export default function CustomersPage() {
       if (custError) throw custError;
 
       alert('Pagamento registrado com sucesso!');
+      
+      setPaymentModalOpen(false);
+      setPaymentInstallment(null);
       
       // Reload details to verify fixes
       loadCustomerDetails({ ...currentCustomer, debt_balance: newDebt });
@@ -202,9 +216,23 @@ export default function CustomersPage() {
 
         {/* Customer Header */}
         <div className="glass-card" style={{ marginBottom: '24px', borderTop: '4px solid var(--primary-accent)' }}>
-          <h1 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{currentCustomer.name}</h1>
-          <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px' }}>
-            {currentCustomer.phone} | {currentCustomer.address}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <h1 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{currentCustomer.name}</h1>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px' }}>
+                {currentCustomer.phone} | {currentCustomer.address}
+              </div>
+            </div>
+            <button 
+              onClick={() => {
+                setFormData({ name: currentCustomer.name, phone: currentCustomer.phone || '', address: currentCustomer.address || '' });
+                setView('form');
+              }}
+              className="btn btn-secondary" 
+              style={{ width: 'auto', padding: '8px 12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center' }}
+            >
+              <Edit2 size={16} style={{ marginRight: '6px' }} /> Editar
+            </button>
           </div>
           
           <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
@@ -262,7 +290,7 @@ export default function CustomersPage() {
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Falta pagar:</div>
                             <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>R$ {(inst.amount - inst.paid_amount).toFixed(2)}</div>
                          </div>
-                         <button onClick={() => handlePayInstallment(inst)} className="btn" style={{ width: 'auto', padding: '8px 16px', background: 'var(--status-good)', color: 'white' }}>
+                         <button onClick={() => openPaymentModal(inst)} className="btn" style={{ width: 'auto', padding: '8px 16px', background: 'var(--status-good)', color: 'white' }}>
                            Receber Pagamento
                          </button>
                       </div>
@@ -317,6 +345,50 @@ export default function CustomersPage() {
              </div>
            )}
         </div>
+
+        {/* Payment Modal */}
+        {paymentModalOpen && paymentInstallment && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px'
+          }}>
+            <div className="glass-card animate-in" style={{ width: '100%', maxWidth: '400px', position: 'relative' }}>
+              <h2 style={{ fontSize: '1.25rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <DollarSign size={20} color="var(--status-good)" /> Receber Pagamento
+              </h2>
+              
+              <div style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
+                Parcela #{paymentInstallment.installment_number}
+                <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', marginTop: '4px' }}>
+                  Falta pagar: R$ {(paymentInstallment.amount - paymentInstallment.paid_amount).toFixed(2)}
+                </div>
+              </div>
+
+              <form onSubmit={handlePayInstallment}>
+                <div className="input-group">
+                  <label className="input-label">Qual valor está sendo pago agora? (R$)</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    className="input-field" 
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+                
+                <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setPaymentModalOpen(false)} style={{ flex: 1 }}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1, background: 'var(--status-good)' }} disabled={loading}>
+                    {loading ? '...' : 'Confirmar'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
       </div>
     );
