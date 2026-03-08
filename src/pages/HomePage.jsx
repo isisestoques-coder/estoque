@@ -121,6 +121,7 @@ export default function HomePage() {
             <ProductCard 
               key={category.code}
               code={category.code}
+              description={category.description}
               totalQuantity={category.totalQuantity}
               settings={settings[category.code]}
               onEditSettings={handleOpenSettings}

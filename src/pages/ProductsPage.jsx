@@ -136,7 +136,7 @@ export default function ProductsPage() {
         
         <form onSubmit={handleSubmit}>
           <div className="input-group">
-            <label className="input-label">Código / Categoria *</label>
+            <label className="input-label">Cod/Categoria *</label>
             <input 
               type="text" 
               name="code"
@@ -149,12 +149,12 @@ export default function ProductsPage() {
           </div>
           
           <div className="input-group">
-            <label className="input-label">Descrição</label>
+            <label className="input-label">Nome do Produto</label>
             <input 
               type="text" 
               name="description"
               className="input-field" 
-              placeholder="Descrição opcional"
+              placeholder="Nome do produto"
               value={formData.description}
               onChange={handleInputChange}
             />
@@ -258,7 +258,7 @@ export default function ProductsPage() {
                 alignItems: 'center'
               }}>
                 <div>
-                  <div style={{ fontWeight: '600', color: 'var(--primary-accent)' }}>{product.code}</div>
+                  <div style={{ fontWeight: '600', color: 'var(--primary-accent)' }}>{product.code} {product.description ? `- ${product.description}` : ''}</div>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
                     Tam: {product.size} | Qtd: <span style={{ color: 'var(--text-primary)', fontWeight: 'bold' }}>{product.quantity}</span> | R$ {product.price}
                   </div>

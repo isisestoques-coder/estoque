@@ -1,7 +1,7 @@
 import React from 'react';
 import { Edit2, Trash2 } from 'lucide-react';
 
-export default function ProductCard({ code, totalQuantity, settings, onEditSettings, onClickVenda }) {
+export default function ProductCard({ code, description, totalQuantity, settings, onEditSettings, onClickVenda }) {
   const warningLevel = settings?.min_quantity_warning ?? 5;
   const criticalLevel = settings?.min_quantity_critical ?? 0;
   const colorWarning = settings?.color_warning ?? 'var(--status-warning)';
@@ -22,7 +22,7 @@ export default function ProductCard({ code, totalQuantity, settings, onEditSetti
     <div className="glass-card" style={{ marginBottom: '16px', borderLeft: `4px solid ${badgeColor}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
         <div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>Categoria {code}</h3>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>Cod/Categoria: {code} {description ? `- ${description}` : ''}</h3>
           <span style={{ fontSize: '0.85rem', color: badgeColor, fontWeight: '500' }}>
             {statusText}
           </span>

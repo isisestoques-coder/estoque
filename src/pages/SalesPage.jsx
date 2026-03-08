@@ -104,7 +104,7 @@ export default function SalesPage() {
         <h2 style={{ fontSize: '1.1rem', marginBottom: '16px' }}>Nova Venda Livre</h2>
         <form onSubmit={handleSell}>
           <div className="input-group">
-            <label className="input-label">Selecione o Produto (Categoria - Tamanho)</label>
+            <label className="input-label">Selecione o Produto (Cod/Categoria - Nome - Tamanho)</label>
             <select 
               className="input-field"
               value={selectedProduct}
@@ -114,7 +114,7 @@ export default function SalesPage() {
               <option value="">Selecione...</option>
               {products.map(p => (
                 <option key={p.id} value={p.id} disabled={p.quantity <= 0}>
-                  {p.code} ({p.size}) - {p.quantity > 0 ? `${p.quantity} em estoque` : 'ESGOTADO'}
+                  {p.code} {p.description ? `- ${p.description}` : ''} ({p.size}) - {p.quantity > 0 ? `${p.quantity} em estoque` : 'ESGOTADO'}
                 </option>
               ))}
             </select>
@@ -174,7 +174,7 @@ export default function SalesPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <div style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Tag size={14} color="var(--primary-accent)" /> 
-                    {sale.product_code}
+                    {sale.product_code} {sale.product_description ? `- ${sale.product_description}` : ''}
                   </div>
                   <div style={{ color: 'var(--primary-accent)', fontWeight: 'bold' }}>
                     R$ {Number(sale.total_price).toFixed(2)}
