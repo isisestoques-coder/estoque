@@ -351,7 +351,7 @@ export default function CustomersPage() {
           <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px'
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 100, padding: '20px', paddingTop: '10vh'
           }}>
             <div className="glass-card animate-in" style={{ width: '100%', maxWidth: '400px', position: 'relative' }}>
               <h2 style={{ fontSize: '1.25rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
