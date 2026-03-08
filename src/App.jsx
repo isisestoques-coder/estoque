@@ -1,11 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Home, Package, ShoppingCart, BarChart3 } from 'lucide-react';
 
-// Placeholder Components
-const HomePage = () => <div className="page-container animate-in"><h1 className="page-title">Estoque</h1><div className="glass-card">Resumo de estoque aqui...</div></div>;
-const ProductsPage = () => <div className="page-container animate-in"><h1 className="page-title">Produtos</h1><div className="glass-card">Cadastro de produtos aqui...</div></div>;
-const SalesPage = () => <div className="page-container animate-in"><h1 className="page-title">Venda Rápida</h1><div className="glass-card">Registro de vendas aqui...</div></div>;
-const DashboardPage = () => <div className="page-container animate-in"><h1 className="page-title">Dashboard</h1><div className="glass-card">Gráficos aqui...</div></div>;
+import HomePage from './pages/HomePage';
+import ProductsPage from './pages/ProductsPage';
+import SalesPage from './pages/SalesPage';
+import DashboardPage from './pages/DashboardPage';
 
 const BottomNav = () => {
   const location = useLocation();
