@@ -107,6 +107,14 @@ export default function DashboardPage() {
     return acc;
   }, {});
 
+  // Group by payment method
+  const salesByPaymentMethod = filteredSales.reduce((acc, s) => {
+    const method = s.payment_method || 'não informado';
+    if (!acc[method]) acc[method] = 0;
+    acc[method] += Number(s.total_price);
+    return acc;
+  }, {});
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -224,6 +232,25 @@ export default function DashboardPage() {
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>R$ {averageTicket.toFixed(2)}</div>
             </div>
           </div>
+
+          {/* Payment Method Summary */}
+          {filteredSales.length > 0 && (
+            <div className="glass-card" style={{ marginBottom: '24px' }}>
+              <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--text-secondary)' }}>Receita por Forma de Pagamento</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+                {Object.entries(salesByPaymentMethod).sort((a,b) => b[1] - a[1]).map(([method, total]) => (
+                  <div key={method} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)', borderLeft: `3px solid ${method === 'crediario' ? '#60a5fa' : method === 'pix' ? '#34d399' : method === 'dinheiro' ? '#10b981' : 'var(--text-secondary)'}` }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'capitalize', marginBottom: '4px' }}>
+                      {method === 'crediario' ? 'Crediário/Fiado' : method}
+                    </div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+                      R$ {total.toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Charts */}
           {filteredSales.length > 0 ? (
