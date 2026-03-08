@@ -154,15 +154,19 @@ export default function DashboardPage() {
   const handleClearSales = async () => {
     setLoading(true);
     try {
-      // Usamos uma RPC (Stored Procedure) no Supabase para garantir que a deleção seja feita 
-      // de forma atômica e confiável no servidor, ignorando limites do cliente.
-      const { error } = await supabase.rpc('clear_dashboard_data');
+      console.log("Iniciando limpeza do dashboard via RPC...");
+      const { error: rpcError } = await supabase.rpc('clear_dashboard_data');
       
-      if (error) {
-        // Se a RPC não estiver criada ainda, tentamos a deleção manual como fallback
-        console.warn("RPC not found, trying manual delete fallback...");
-        const { error: manualError } = await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (manualError) throw manualError;
+      if (rpcError) {
+        console.error("Erro na RPC:", rpcError);
+        console.log("Tentando fallback via deletação direta...");
+        
+        // Fallback: Delete payment logs first, then sales
+        const { error: logsError } = await supabase.from('payment_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (logsError) throw new Error("Erro ao apagar logs: " + logsError.message);
+        
+        const { error: salesError } = await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (salesError) throw new Error("Erro ao apagar vendas: " + salesError.message);
       }
       
       const now = new Date();
@@ -171,10 +175,12 @@ export default function DashboardPage() {
       setLastClearedDate(formattedDate);
       
       setDeleteModalOpen(false);
-      fetchSales();
-      alert("Dashboard limpo com sucesso! (Vendas e recebimentos foram apagados, mas as dívidas dos clientes foram mantidas).");
+      await fetchSales();
+      alert("Dashboard limpo com sucesso! (Vendas e recebimentos apagados, dívidas preservadas).");
     } catch (error) {
-      alert("Erro ao apagar dados: " + error.message);
+      console.error("Erro fatal na limpeza:", error);
+      alert("Falha na limpeza: " + error.message + "\n\nCertifique-se de que rodou o arquivo 'supabase-wipe.sql' no Supabase.");
+    } finally {
       setLoading(false);
     }
   };
