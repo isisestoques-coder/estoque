@@ -24,6 +24,10 @@ export default function DashboardPage() {
   const [startDate, setStartDate] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
+  // Delete Modal and History
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [lastClearedDate, setLastClearedDate] = useState(() => localStorage.getItem('@isis:lastClearedDate'));
+
   useEffect(() => {
     fetchSales();
   }, []);
@@ -148,20 +152,22 @@ export default function DashboardPage() {
   const totalPendingCrediario = customers.reduce((sum, c) => sum + Number(c.debt_balance || 0), 0);
 
   const handleClearSales = async () => {
-    if (window.confirm("ATENÇÃO: Você está prestes a apagar TODOS os registros de vendas, parcelamentos e recebtimentos do sistema. Essa ação é IRREVERSÍVEL. Deseja continuar?")) {
-      setLoading(true);
-      try {
-        // Since installments and payment_logs have ON DELETE CASCADE, deleting sales will clear them too.
-        // Supabase won't let you delete without a filter, so we use .not('id', 'is', null) which matches all.
-        const { error } = await supabase.from('sales').delete().not('id', 'is', null);
-        if (error) throw error;
-        
-        alert("Todos os registros de vendas foram apagados com sucesso.");
-        fetchSales();
-      } catch (error) {
-        alert("Erro ao apagar dados: " + error.message);
-        setLoading(false);
-      }
+    setLoading(true);
+    try {
+      // Supabase delete all requires a filter that is always true when RLS is enabled and you want to delete everything
+      const { error } = await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (error) throw error;
+      
+      const now = new Date();
+      const formattedDate = format(now, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+      localStorage.setItem('@isis:lastClearedDate', formattedDate);
+      setLastClearedDate(formattedDate);
+      
+      setDeleteModalOpen(false);
+      fetchSales();
+    } catch (error) {
+      alert("Erro ao apagar dados: " + error.message);
+      setLoading(false);
     }
   };
 
@@ -374,9 +380,9 @@ export default function DashboardPage() {
           </div>
 
           {/* Danger Zone */}
-          <div style={{ marginTop: '48px', borderTop: '1px solid rgba(239, 68, 68, 0.3)', paddingTop: '24px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ marginTop: '48px', borderTop: '1px solid rgba(239, 68, 68, 0.3)', paddingTop: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <button 
-              onClick={handleClearSales}
+              onClick={() => setDeleteModalOpen(true)}
               style={{
                 background: 'rgba(239, 68, 68, 0.1)',
                 color: 'var(--status-critical)',
@@ -392,7 +398,41 @@ export default function DashboardPage() {
             >
               Apagar Todos os Dados de Vendas
             </button>
+            {lastClearedDate && (
+              <div style={{ marginTop: '12px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                Última limpeza de dados realizada em: <strong>{lastClearedDate}</strong>
+              </div>
+            )}
           </div>
+
+          {/* Delete Confirmation Modal */}
+          {deleteModalOpen && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px'
+            }}>
+              <div className="glass-card animate-in" style={{ width: '100%', maxWidth: '400px', borderTop: '4px solid var(--status-critical)' }}>
+                <h2 style={{ fontSize: '1.25rem', marginBottom: '16px', color: 'var(--status-critical)' }}>
+                  Atenção: Ação Irreversível!
+                </h2>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.5' }}>
+                  Você está prestes a apagar <strong>TODOS</strong> os registros de vendas, recibos e histórico de parcelas do sistema. 
+                  Os clientes e produtos continuarão existindo, mas os dados financeiros de vendas serão perdidos para sempre.
+                  <br/><br/>
+                  Tem certeza que deseja continuar?
+                </p>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button className="btn btn-secondary" onClick={() => setDeleteModalOpen(false)} style={{ flex: 1 }}>
+                    Cancelar
+                  </button>
+                  <button className="btn" onClick={handleClearSales} style={{ flex: 1, background: 'var(--status-critical)', color: 'white' }} disabled={loading}>
+                    {loading ? 'Apagando...' : 'Sim, Apagar Tudo'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
