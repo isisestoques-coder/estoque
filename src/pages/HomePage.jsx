@@ -123,6 +123,7 @@ export default function HomePage() {
               code={category.code}
               description={category.description}
               totalQuantity={category.totalQuantity}
+              items={category.items}
               settings={settings[category.code]}
               onEditSettings={handleOpenSettings}
               onClickVenda={handleOpenSale}
