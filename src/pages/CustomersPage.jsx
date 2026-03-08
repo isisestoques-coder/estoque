@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Users, UserPlus, Search, Edit2, Trash2, ArrowLeft, DollarSign, Calendar, Clock, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
+import { toPng } from 'html-to-image';
+import { Share2, FileText, Download, X } from 'lucide-react';
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -27,6 +30,11 @@ export default function CustomersPage() {
   // Delete Confirmation state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState(null);
+
+  // Receipt Modal state
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [selectedSale, setSelectedSale] = useState(null);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -188,6 +196,110 @@ export default function CustomersPage() {
     }
   };
 
+  const generatePDFReport = () => {
+    if (!currentCustomer) return;
+    
+    const doc = new jsPDF();
+    const now = format(new Date(), 'dd/MM/yyyy HH:mm');
+    
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(40);
+    doc.text('Relatório de Cliente - Estoque ISIS', 105, 20, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.text(`Gerado em: ${now}`, 105, 28, { align: 'center' });
+    
+    // Customer Info
+    doc.setFontSize(14);
+    doc.text('Dados do Cliente', 14, 45);
+    doc.setFontSize(11);
+    doc.text(`Nome: ${currentCustomer.name}`, 14, 52);
+    doc.text(`Telefone: ${currentCustomer.phone || 'Não informado'}`, 14, 58);
+    doc.text(`Endereço: ${currentCustomer.address || 'Não informado'}`, 14, 64);
+    doc.setTextColor(200, 0, 0);
+    doc.text(`Saldo Devedor Atual: R$ ${Number(currentCustomer.debt_balance).toFixed(2)}`, 14, 70);
+    doc.setTextColor(0);
+
+    // Installments Table
+    if (customerInstallments.length > 0) {
+      doc.setFontSize(14);
+      doc.text('Histórico de Parcelas', 14, 85);
+      
+      const head = [['#', 'Vencimento', 'Valor (R$)', 'Pago (R$)', 'Status']];
+      const body = customerInstallments.map(inst => [
+        inst.installment_number,
+        format(new Date(inst.due_date), 'dd/MM/yyyy'),
+        Number(inst.amount).toFixed(2),
+        Number(inst.paid_amount).toFixed(2),
+        inst.status === 'paid' ? 'Pago' : inst.status === 'partial' ? 'Parcial' : 'Pendente'
+      ]);
+
+      doc.autoTable({
+        startY: 90,
+        head: head,
+        body: body,
+        theme: 'grid',
+        headStyles: { fillColor: [139, 92, 246] }
+      });
+    }
+
+    // Payment Logs Table
+    if (customerPaymentLogs.length > 0) {
+      const finalY = doc.lastAutoTable?.finalY || 90;
+      doc.setFontSize(14);
+      doc.text('Histórico de Recebimentos', 14, finalY + 15);
+      
+      const headLogs = [['Data/Hora', 'Valor Recebido (R$)']];
+      const bodyLogs = customerPaymentLogs.map(log => [
+        format(new Date(log.paid_at), 'dd/MM/yyyy HH:mm'),
+        Number(log.amount_paid).toFixed(2)
+      ]);
+
+      doc.autoTable({
+        startY: finalY + 20,
+        head: headLogs,
+        body: bodyLogs,
+        theme: 'striped',
+        headStyles: { fillColor: [16, 185, 129] }
+      });
+    }
+
+    doc.save(`Relatorio_${currentCustomer.name.replace(/\s+/g, '_')}.pdf`);
+  };
+
+  const shareReceiptAsImage = async () => {
+    const node = document.getElementById('receipt-content');
+    if (!node) return;
+    
+    try {
+      setSharing(true);
+      const dataUrl = await toPng(node, { 
+        backgroundColor: '#0f172a',
+        style: {
+          borderRadius: '16px'
+        }
+      });
+      
+      const link = document.createElement('a');
+      link.download = `Recibo_${currentCustomer.name.replace(/\s+/g, '_')}_${format(new Date(), 'ddMMyy')}.png`;
+      link.href = dataUrl;
+      link.click();
+      
+      alert('Imagem do recibo gerada com sucesso! Você já pode compartilhar.');
+    } catch (error) {
+      console.error('Erro ao gerar imagem:', error);
+      alert('Erro ao gerar imagem para compartilhamento.');
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const openReceiptModal = (sale) => {
+    setSelectedSale(sale);
+    setReceiptModalOpen(true);
+  };
+
   const filteredCustomers = customers.filter(c => 
     c.name.toLowerCase().includes(search.toLowerCase()) || 
     (c.phone && c.phone.includes(search))
@@ -267,11 +379,21 @@ export default function CustomersPage() {
             </div>
           </div>
           
-          <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-            <div style={{ fontSize: '0.9rem', color: 'var(--status-critical)', fontWeight: '600', marginBottom: '4px' }}>Saldo Devedor Total</div>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-              R$ {Number(currentCustomer.debt_balance).toFixed(2)}
+          <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+            <div style={{ flex: 1, padding: '16px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--status-critical)', fontWeight: '600', marginBottom: '4px' }}>Saldo Devedor Total</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+                R$ {Number(currentCustomer.debt_balance).toFixed(2)}
+              </div>
             </div>
+            <button 
+              onClick={generatePDFReport}
+              className="btn btn-secondary" 
+              style={{ width: 'auto', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--accent-purple)' }}
+            >
+              <FileText size={18} color="var(--accent-purple)" />
+              <span style={{ fontSize: '0.9rem' }}>Relatório PDF</span>
+            </button>
           </div>
         </div>
 
@@ -342,7 +464,12 @@ export default function CustomersPage() {
           ) : (
             <div style={{ display: 'grid', gap: '8px' }}>
               {customerSales.map(sale => (
-                <div key={sale.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <div 
+                  key={sale.id} 
+                  onClick={() => openReceiptModal(sale)}
+                  style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', borderRadius: '8px' }}
+                  className="hover-card"
+                >
                   <div>
                     <div style={{ fontWeight: '500' }}>{sale.product_description || sale.product_code}</div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{format(new Date(sale.sold_at), "dd/MM/yyyy", { locale: ptBR })} | Pagamento: {sale.payment_method?.toUpperCase()}</div>
@@ -418,6 +545,85 @@ export default function CustomersPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Receipt / Sale Details Modal */}
+        {receiptModalOpen && selectedSale && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120, padding: '20px'
+          }}>
+            <div style={{ width: '100%', maxWidth: '450px', position: 'relative' }}>
+              {/* Actual Content to Capture */}
+              <div id="receipt-content" style={{ backgroundColor: '#0f172a', padding: '32px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--primary-accent)', fontWeight: 'bold', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '8px' }}>Recibo de Compra</div>
+                  <h2 style={{ fontSize: '1.8rem', fontWeight: 'bold', margin: 0 }}>Estoque ISIS</h2>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{format(new Date(selectedSale.sold_at), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}</div>
+                </div>
+
+                <div style={{ borderTop: '1px dashed rgba(255,255,255,0.1)', borderBottom: '1px dashed rgba(255,255,255,0.1)', padding: '24px 0', marginBottom: '24px' }}>
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Cliente</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: '600' }}>{currentCustomer.name}</div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Produto</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: '600' }}>{selectedSale.product_description || selectedSale.product_code}</div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Qtd: {selectedSale.quantity} un.</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Pagamento</div>
+                    <div style={{ fontWeight: '600', textTransform: 'uppercase' }}>{selectedSale.payment_method === 'crediario' ? 'Crediário/Fiado' : selectedSale.payment_method}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Entrada</div>
+                    <div style={{ fontWeight: '600' }}>R$ {Number(selectedSale.down_payment || 0).toFixed(2)}</div>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Total da Venda</div>
+                  <div style={{ fontSize: '2.2rem', fontWeight: 'bold', color: 'var(--primary-accent)' }}>
+                    R$ {Number(selectedSale.total_price).toFixed(2)}
+                  </div>
+                  {selectedSale.installments_count > 1 && (
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                      Parcelado em {selectedSale.installments_count}x
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  Obrigado pela preferência!
+                </div>
+              </div>
+
+              {/* Actions below the capture node */}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                <button 
+                  onClick={() => setReceiptModalOpen(false)} 
+                  className="btn btn-secondary" 
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                >
+                  <X size={18} /> Fechar
+                </button>
+                <button 
+                  onClick={shareReceiptAsImage} 
+                  className="btn btn-primary" 
+                  style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#2563eb' }}
+                  disabled={sharing}
+                >
+                  {sharing ? 'Gerando...' : <><Share2 size={18} /> Compartilhar Imagem</>}
+                </button>
+              </div>
             </div>
           </div>
         )}
