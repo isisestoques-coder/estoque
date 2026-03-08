@@ -15,6 +15,7 @@ ChartJS.register(
 
 export default function DashboardPage() {
   const [sales, setSales] = useState([]);
+  const [paymentLogs, setPaymentLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('month'); // today, week, month, year, all
   
@@ -29,15 +30,18 @@ export default function DashboardPage() {
   async function fetchSales() {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('sales')
-        .select('*')
-        .order('sold_at', { ascending: true });
+      const [salesRes, logsRes] = await Promise.all([
+        supabase.from('sales').select('*').order('sold_at', { ascending: true }),
+        supabase.from('payment_logs').select('*').order('paid_at', { ascending: true })
+      ]);
         
-      if (error) throw error;
-      setSales(data || []);
+      if (salesRes.error) throw salesRes.error;
+      if (logsRes.error) throw logsRes.error;
+      
+      setSales(salesRes.data || []);
+      setPaymentLogs(logsRes.data || []);
     } catch (error) {
-      console.error('Error fetching sales:', error);
+      console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
     }
@@ -73,17 +77,25 @@ export default function DashboardPage() {
         break;
       case 'all':
       default:
-        return sales;
+        return { filteredSales: sales, filteredLogs: paymentLogs };
     }
 
-    return sales.filter(s => {
+    const filteredSales = sales.filter(s => {
       if (!s.sold_at) return false;
       const date = parseISO(s.sold_at);
       return isWithinInterval(date, { start, end });
     });
+
+    const filteredLogs = paymentLogs.filter(l => {
+      if (!l.paid_at) return false;
+      const date = parseISO(l.paid_at);
+      return isWithinInterval(date, { start, end });
+    });
+
+    return { filteredSales, filteredLogs };
   };
 
-  const filteredSales = getFilteredSales();
+  const { filteredSales, filteredLogs } = getFilteredSales();
 
   // Calculate metrics
   const totalRevenue = filteredSales.reduce((sum, s) => sum + Number(s.total_price), 0);
@@ -107,13 +119,44 @@ export default function DashboardPage() {
     return acc;
   }, {});
 
-  // Group by payment method
+  // Group by payment method (Actual Received Cash)
   const salesByPaymentMethod = filteredSales.reduce((acc, s) => {
     const method = s.payment_method || 'não informado';
     if (!acc[method]) acc[method] = 0;
-    acc[method] += Number(s.total_price);
+    
+    if (method === 'crediario') {
+       acc[method] += Number(s.down_payment || 0); // Only add down payment for crediario sales
+    } else {
+       acc[method] += Number(s.total_price); // Full total price for other methods
+    }
     return acc;
   }, {});
+  
+  // Add installment payments to the crediário total 
+  filteredLogs.forEach(log => {
+      if (!salesByPaymentMethod['crediario (parcelas)']) salesByPaymentMethod['crediario (parcelas)'] = 0;
+      salesByPaymentMethod['crediario (parcelas)'] += Number(log.amount_paid);
+  });
+
+  const totalReceived = Object.values(salesByPaymentMethod).reduce((sum, val) => sum + val, 0);
+
+  const handleClearSales = async () => {
+    if (window.confirm("ATENÇÃO: Você está prestes a apagar TODOS os registros de vendas, parcelamentos e recebtimentos do sistema. Essa ação é IRREVERSÍVEL. Deseja continuar?")) {
+      setLoading(true);
+      try {
+        // Since installments and payment_logs have ON DELETE CASCADE, deleting sales will clear them too.
+        // Supabase won't let you delete without a filter, so we use .not('id', 'is', null) which matches all.
+        const { error } = await supabase.from('sales').delete().not('id', 'is', null);
+        if (error) throw error;
+        
+        alert("Todos os registros de vendas foram apagados com sucesso.");
+        fetchSales();
+      } catch (error) {
+        alert("Erro ao apagar dados: " + error.message);
+        setLoading(false);
+      }
+    }
+  };
 
   const chartOptions = {
     responsive: true,
@@ -227,9 +270,9 @@ export default function DashboardPage() {
             
             <div className="glass-card" style={{ padding: '16px', borderTop: '3px solid var(--accent-purple)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                <TrendingUp size={16} /> <span style={{ fontSize: '0.85rem' }}>Ticket Médio</span>
+                <TrendingUp size={16} /> <span style={{ fontSize: '0.85rem' }}>Valor Recebido Real</span>
               </div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>R$ {averageTicket.toFixed(2)}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>R$ {totalReceived.toFixed(2)}</div>
             </div>
           </div>
 
@@ -239,9 +282,9 @@ export default function DashboardPage() {
               <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--text-secondary)' }}>Receita por Forma de Pagamento</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
                 {Object.entries(salesByPaymentMethod).sort((a,b) => b[1] - a[1]).map(([method, total]) => (
-                  <div key={method} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)', borderLeft: `3px solid ${method === 'crediario' ? '#60a5fa' : method === 'pix' ? '#34d399' : method === 'dinheiro' ? '#10b981' : 'var(--text-secondary)'}` }}>
+                  <div key={method} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)', borderLeft: `3px solid ${method.includes('crediario') ? '#60a5fa' : method === 'pix' ? '#34d399' : method === 'dinheiro' ? '#10b981' : 'var(--text-secondary)'}` }}>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'capitalize', marginBottom: '4px' }}>
-                      {method === 'crediario' ? 'Crediário/Fiado' : method}
+                      {method === 'crediario' ? 'Crediário (Entradas)' : method}
                     </div>
                     <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
                       R$ {total.toFixed(2)}
@@ -314,6 +357,27 @@ export default function DashboardPage() {
             ) : (
               <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>Nenhuma venda para listar.</p>
             )}
+          </div>
+
+          {/* Danger Zone */}
+          <div style={{ marginTop: '48px', borderTop: '1px solid rgba(239, 68, 68, 0.3)', paddingTop: '24px', display: 'flex', justifyContent: 'center' }}>
+            <button 
+              onClick={handleClearSales}
+              style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: 'var(--status-critical)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                padding: '12px 24px',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              Apagar Todos os Dados de Vendas
+            </button>
           </div>
         </>
       )}
