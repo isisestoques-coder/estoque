@@ -198,3 +198,9 @@ select.input-field option {
 .animate-in {
   animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+@media (max-width: 500px) {
+  .hide-mobile {
+    display: none !important;
+  }
+}

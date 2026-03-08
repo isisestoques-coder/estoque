@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { Home, Package, ShoppingCart, BarChart3, LogOut } from 'lucide-react';
+import { Home, Package, ShoppingCart, BarChart3, LogOut, Users } from 'lucide-react';
 
 import { AuthProvider, useAuth } from './lib/contexts/AuthContext';
 import HomePage from './pages/HomePage';
@@ -7,6 +7,7 @@ import ProductsPage from './pages/ProductsPage';
 import SalesPage from './pages/SalesPage';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
+import CustomersPage from './pages/CustomersPage';
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -29,11 +30,11 @@ const BottomNav = () => {
     alignItems: 'center',
     justifyContent: 'center',
     color: isActive ? 'var(--primary-accent)' : 'var(--text-secondary)',
-    gap: '4px',
+    gap: '2px',
     flex: 1,
-    padding: '12px 0',
+    padding: '10px 0',
     transition: 'color 0.2s',
-    fontSize: '0.75rem',
+    fontSize: '0.70rem',
     fontWeight: isActive ? '600' : '500',
     border: 'none',
     background: 'none'
@@ -55,23 +56,27 @@ const BottomNav = () => {
       zIndex: 50
     }}>
       <Link to="/" style={getStyle(path === '/')}>
-        <Home size={24} />
+        <Home size={22} />
         Início
       </Link>
       <Link to="/produtos" style={getStyle(path === '/produtos')}>
-        <Package size={24} />
+        <Package size={22} />
         Produtos
       </Link>
+      <Link to="/clientes" style={getStyle(path === '/clientes')}>
+        <Users size={22} />
+        Clientes
+      </Link>
       <Link to="/vendas" style={getStyle(path === '/vendas')}>
-        <ShoppingCart size={24} />
+        <ShoppingCart size={22} />
         Vendas
       </Link>
       <Link to="/dashboard" style={getStyle(path === '/dashboard')}>
-        <BarChart3 size={24} />
+        <BarChart3 size={22} />
         Painel
       </Link>
       <button onClick={() => signOut()} style={getStyle(false)}>
-        <LogOut size={24} />
+        <LogOut size={22} />
         Sair
       </button>
     </nav>
@@ -87,6 +92,7 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
             <Route path="/produtos" element={<ProtectedRoute><ProductsPage /></ProtectedRoute>} />
+            <Route path="/clientes" element={<ProtectedRoute><CustomersPage /></ProtectedRoute>} />
             <Route path="/vendas" element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           </Routes>

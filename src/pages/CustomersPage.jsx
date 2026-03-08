@@ -1,0 +1,387 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { Users, UserPlus, Search, Edit2, Trash2, ArrowLeft, DollarSign, Calendar, Clock, CheckCircle } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+export default function CustomersPage() {
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  
+  // View states: 'list', 'form', 'details'
+  const [view, setView] = useState('list');
+  const [currentCustomer, setCurrentCustomer] = useState(null);
+  
+  // Form state
+  const [formData, setFormData] = useState({ name: '', phone: '', address: '' });
+
+  // Details state
+  const [customerSales, setCustomerSales] = useState([]);
+  const [customerInstallments, setCustomerInstallments] = useState([]);
+  const [customerPaymentLogs, setCustomerPaymentLogs] = useState([]);
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [view]);
+
+  async function fetchCustomers() {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('name', { ascending: true });
+        
+      if (error) throw error;
+      setCustomers(data || []);
+    } catch (error) {
+      console.error('Error fetching customers:', error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadCustomerDetails(customer) {
+    try {
+      setLoading(true);
+      setCurrentCustomer(customer);
+      setView('details');
+
+      const [salesRes, instRes, logsRes] = await Promise.all([
+        supabase.from('sales').select('*').eq('customer_id', customer.id).order('sold_at', { ascending: false }),
+        supabase.from('installments').select('*').eq('customer_id', customer.id).order('due_date', { ascending: true }),
+        supabase.from('payment_logs').select('*').eq('customer_id', customer.id).order('paid_at', { ascending: false })
+      ]);
+
+      setCustomerSales(salesRes.data || []);
+      setCustomerInstallments(instRes.data || []);
+      setCustomerPaymentLogs(logsRes.data || []);
+    } catch (error) {
+      alert('Erro ao carregar detalhes: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmitForm = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = { ...formData, updated_at: new Date() };
+
+      if (currentCustomer) {
+        // Edit
+        const { error } = await supabase.from('customers').update(payload).eq('id', currentCustomer.id);
+        if (error) throw error;
+        alert('Cliente atualizado com sucesso!');
+      } else {
+        // Create
+        const { error } = await supabase.from('customers').insert([payload]);
+        if (error) throw error;
+        alert('Cliente cadastrado com sucesso!');
+      }
+      
+      setFormData({ name: '', phone: '', address: '' });
+      setCurrentCustomer(null);
+      setView('list');
+    } catch (error) {
+      alert('Erro ao salvar cliente: ' + error.message);
+    }
+  };
+
+  const handlePayInstallment = async (installment) => {
+    const amountToPay = window.prompt(`Valor da parcela: R$ ${(installment.amount - installment.paid_amount).toFixed(2)}\n\nDigite o valor que o cliente está pagando agora (Pagamento total ou parcial):`, (installment.amount - installment.paid_amount).toFixed(2));
+    
+    if (!amountToPay) return; // Cancelled
+    
+    const paidValue = parseFloat(amountToPay.replace(',', '.'));
+    if (isNaN(paidValue) || paidValue <= 0) {
+      return alert('Valor inválido!');
+    }
+
+    try {
+      setLoading(true);
+      
+      const isTotalPayment = paidValue >= (installment.amount - installment.paid_amount);
+      const newPaidAmount = installment.paid_amount + paidValue;
+      const newStatus = isTotalPayment ? 'paid' : 'partial';
+
+      // 1. Update Installment
+      const { error: instError } = await supabase
+        .from('installments')
+        .update({ 
+          paid_amount: newPaidAmount, 
+          status: newStatus,
+          payment_date: isTotalPayment ? new Date() : installment.payment_date 
+        })
+        .eq('id', installment.id);
+      
+      if (instError) throw instError;
+
+      // 2. Insert Payment Log
+      const { error: logError } = await supabase
+        .from('payment_logs')
+        .insert([{
+          installment_id: installment.id,
+          customer_id: installment.customer_id,
+          amount_paid: paidValue
+        }]);
+
+      if (logError) throw logError;
+
+      // 3. Update Customer Debt Balance (reduce debt)
+      const newDebt = Math.max(0, currentCustomer.debt_balance - paidValue);
+      const { error: custError } = await supabase
+        .from('customers')
+        .update({ debt_balance: newDebt, updated_at: new Date() })
+        .eq('id', currentCustomer.id);
+        
+      if (custError) throw custError;
+
+      alert('Pagamento registrado com sucesso!');
+      
+      // Reload details to verify fixes
+      loadCustomerDetails({ ...currentCustomer, debt_balance: newDebt });
+      
+    } catch (error) {
+      alert('Erro ao processar pagamento: ' + error.message);
+      setLoading(false);
+    }
+  };
+
+  const filteredCustomers = customers.filter(c => 
+    c.name.toLowerCase().includes(search.toLowerCase()) || 
+    (c.phone && c.phone.includes(search))
+  );
+
+  // --- RENDER VIEWS ---
+
+  if (view === 'form') {
+    return (
+      <div className="page-container animate-in">
+        <button onClick={() => setView('list')} className="btn btn-secondary" style={{ marginBottom: '24px', width: 'auto' }}>
+          <ArrowLeft size={16} /> Voltar
+        </button>
+
+        <div className="glass-card">
+          <h2 style={{ fontSize: '1.2rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {currentCustomer ? <><Edit2 size={20} /> Editar Cliente</> : <><UserPlus size={20} /> Novo Cliente</>}
+          </h2>
+          
+          <form onSubmit={handleSubmitForm}>
+            <div className="input-group">
+              <label className="input-label">Nome Completo *</label>
+              <input type="text" name="name" required className="input-field" value={formData.name} onChange={handleInputChange} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Telefone</label>
+              <input type="tel" name="phone" className="input-field" placeholder="(99) 99999-9999" value={formData.phone} onChange={handleInputChange} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Endereço Completo</label>
+              <textarea name="address" className="input-field" rows="3" value={formData.address} onChange={handleInputChange}></textarea>
+            </div>
+            <button type="submit" className="btn btn-primary">Salvar Cliente</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'details' && currentCustomer) {
+    return (
+      <div className="page-container animate-in">
+        <button onClick={() => setView('list')} className="btn btn-secondary" style={{ marginBottom: '24px', width: 'auto' }}>
+          <ArrowLeft size={16} /> Voltar para Clientes
+        </button>
+
+        {/* Customer Header */}
+        <div className="glass-card" style={{ marginBottom: '24px', borderTop: '4px solid var(--primary-accent)' }}>
+          <h1 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{currentCustomer.name}</h1>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px' }}>
+            {currentCustomer.phone} | {currentCustomer.address}
+          </div>
+          
+          <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+            <div style={{ fontSize: '0.9rem', color: 'var(--status-critical)', fontWeight: '600', marginBottom: '4px' }}>Saldo Devedor Total</div>
+            <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+              R$ {Number(currentCustomer.debt_balance).toFixed(2)}
+            </div>
+          </div>
+        </div>
+
+        {/* Installments Section */}
+        <h2 className="page-title" style={{ fontSize: '1.2rem', marginTop: '32px' }}>Parcelas e Pagamentos</h2>
+        <div className="glass-card" style={{ marginBottom: '24px' }}>
+          {customerInstallments.length === 0 ? (
+            <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>Nenhuma parcela registrada para este cliente.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {customerInstallments.map(inst => {
+                const isPaid = inst.status === 'paid';
+                const isPartial = inst.status === 'partial';
+                const isOverdue = new Date(inst.due_date) < new Date() && !isPaid;
+                
+                return (
+                  <div key={inst.id} style={{
+                    padding: '16px',
+                    borderRadius: 'var(--radius-md)',
+                    border: `1px solid ${isPaid ? 'rgba(16, 185, 129, 0.2)' : isOverdue ? 'rgba(239, 68, 68, 0.3)' : 'var(--border-color)'}`,
+                    background: isPaid ? 'rgba(16, 185, 129, 0.05)' : isOverdue ? 'rgba(239, 68, 68, 0.05)' : 'rgba(255,255,255,0.02)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <div style={{ fontWeight: 'bold' }}>Parcela #{inst.installment_number}</div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                         {isPaid && <CheckCircle size={16} color="var(--status-good)" />}
+                         <span style={{ 
+                           color: isPaid ? 'var(--status-good)' : isOverdue ? 'var(--status-critical)' : 'var(--status-warning)',
+                           fontWeight: '600'
+                         }}>
+                           {isPaid ? 'Pago' : isPartial ? 'Parcial' : isOverdue ? 'Atrasada' : 'Pendente'}
+                         </span>
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                      <div>
+                        Vencimento: <span style={{ color: isOverdue ? 'var(--status-critical)' : 'inherit', fontWeight: isOverdue ? 'bold': 'normal' }}>
+                          {format(new Date(inst.due_date), 'dd/MM/yyyy')}
+                        </span>
+                      </div>
+                      <div>Valor: R$ {Number(inst.amount).toFixed(2)}</div>
+                    </div>
+
+                    {!isPaid && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                         <div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Falta pagar:</div>
+                            <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>R$ {(inst.amount - inst.paid_amount).toFixed(2)}</div>
+                         </div>
+                         <button onClick={() => handlePayInstallment(inst)} className="btn" style={{ width: 'auto', padding: '8px 16px', background: 'var(--status-good)', color: 'white' }}>
+                           Receber Pagamento
+                         </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Sales History */}
+        <h2 className="page-title" style={{ fontSize: '1.2rem', marginTop: '32px' }}>Histórico de Compras</h2>
+        <div className="glass-card" style={{ marginBottom: '24px' }}>
+           {customerSales.length === 0 ? (
+            <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>Nenhuma compra registrada.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: '8px' }}>
+              {customerSales.map(sale => (
+                <div key={sale.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div>
+                    <div style={{ fontWeight: '500' }}>{sale.product_description || sale.product_code}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{format(new Date(sale.sold_at), "dd/MM/yyyy", { locale: ptBR })} | Pagamento: {sale.payment_method?.toUpperCase()}</div>
+                  </div>
+                  <div style={{ fontWeight: 'bold' }}>
+                    R$ {Number(sale.total_price).toFixed(2)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        {/* Payment Logs History */}
+        <h2 className="page-title" style={{ fontSize: '1.2rem', marginTop: '32px' }}>Histórico de Recebimentos (Logs)</h2>
+        <div className="glass-card">
+           {customerPaymentLogs.length === 0 ? (
+            <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>Nenhum pagamento recebido ainda.</p>
+          ) : (
+             <div style={{ display: 'grid', gap: '8px' }}>
+               {customerPaymentLogs.map(log => (
+                 <div key={log.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                   <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '8px', borderRadius: '50%' }}>
+                     <DollarSign size={16} color="var(--status-good)" />
+                   </div>
+                   <div style={{ flex: 1 }}>
+                     <div style={{ fontWeight: '500' }}>R$ {Number(log.amount_paid).toFixed(2)} recebido</div>
+                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{format(new Date(log.paid_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</div>
+                   </div>
+                 </div>
+               ))}
+             </div>
+           )}
+        </div>
+
+      </div>
+    );
+  }
+
+  // --- DEFAULT VIEW: LIST ---
+  return (
+    <div className="page-container animate-in">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h1 className="page-title" style={{ marginBottom: 0 }}>Meus Clientes</h1>
+        <button 
+          onClick={() => { setFormData({ name: '', phone: '', address: '' }); setCurrentCustomer(null); setView('form'); }} 
+          className="btn btn-primary" 
+          style={{ width: 'auto', padding: '10px 16px' }}
+        >
+          <UserPlus size={20} /> <span className="hide-mobile">Novo Cliente</span>
+        </button>
+      </div>
+
+      <div className="glass-card">
+        <div className="input-group" style={{ position: 'relative' }}>
+          <Search size={18} style={{ position: 'absolute', left: '16px', top: '15px', color: 'var(--text-muted)' }} />
+          <input 
+            type="text" 
+            className="input-field" 
+            placeholder="Buscar por nome ou telefone..." 
+            style={{ paddingLeft: '44px' }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary)' }}>Carregando...</div>
+        ) : filteredCustomers.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary)' }}>Nenhum cliente encontrado.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: '12px' }}>
+            {filteredCustomers.map(customer => (
+              <div 
+                key={customer.id} 
+                className="glass-card" 
+                style={{ 
+                  padding: '16px', 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  border: '1px solid transparent',
+                  borderLeft: customer.debt_balance > 0 ? '4px solid var(--status-critical)' : '4px solid var(--status-good)',
+                }}
+                onClick={() => loadCustomerDetails(customer)}
+              >
+                <div>
+                  <div style={{ fontWeight: '600', fontSize: '1.1rem' }}>{customer.name}</div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    {customer.phone || 'Sem telefone'} | Saldo devedor: R$ {Number(customer.debt_balance).toFixed(2)}
+                  </div>
+                </div>
+                <Users size={20} color="var(--primary-accent)" />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
