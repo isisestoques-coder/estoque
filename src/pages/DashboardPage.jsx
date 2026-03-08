@@ -247,6 +247,47 @@ export default function DashboardPage() {
               Nenhuma venda encontrada para o período selecionado.
             </div>
           )}
+
+          {/* Recent Sales List with Payment Method */}
+          <div className="glass-card" style={{ marginTop: '24px' }}>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-secondary)' }}>Vendas Recentes no Período</h3>
+            {filteredSales.length > 0 ? (
+              <div style={{ display: 'grid', gap: '8px' }}>
+                {filteredSales.slice().reverse().slice(0, 10).map(sale => (
+                  <div key={sale.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <div>
+                      <div style={{ fontWeight: '600', marginBottom: '4px' }}>
+                        {sale.product_code} {sale.product_description ? `- ${sale.product_description}` : ''}
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span>{format(parseISO(sale.sold_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                        
+                        {sale.payment_method && (
+                          <span style={{ 
+                            padding: '2px 8px', 
+                            borderRadius: '12px', 
+                            background: sale.payment_method === 'crediario' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                            color: sale.payment_method === 'crediario' ? '#60a5fa' : 'var(--text-secondary)',
+                            fontSize: '0.75rem',
+                            fontWeight: sale.payment_method === 'crediario' ? 'bold' : 'normal',
+                            border: sale.payment_method === 'crediario' ? '1px solid rgba(59, 130, 246, 0.5)' : 'none'
+                          }}>
+                            {sale.payment_method === 'crediario' ? 'CREDIÁRIO / FIADO' : sale.payment_method.toUpperCase()}
+                            {sale.payment_method === 'crediario' && sale.installments_count > 1 ? ` (${sale.installments_count}x)` : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--primary-accent)' }}>
+                      R$ {Number(sale.total_price).toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>Nenhuma venda para listar.</p>
+            )}
+          </div>
         </>
       )}
     </div>
